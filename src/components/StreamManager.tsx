@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +17,27 @@ export const StreamManager = () => {
   const [streamUrl, setStreamUrl] = useState("");
   const { toast } = useToast();
 
+  // Load saved streams from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("streams");
+    if (saved) setStreams(JSON.parse(saved));
+  }, []);
+
+  // Save streams to localStorage
+  useEffect(() => {
+    localStorage.setItem("streams", JSON.stringify(streams));
+  }, [streams]);
+
+  const normalizeUrl = (url: string) => url.trim().toLowerCase().replace(/\/$/, "");
+
   const isValidStreamUrl = (url: string): boolean => {
     try {
       const urlObj = new URL(url);
-      const isHLS = url.includes('.m3u8');
-      const isRTMP = url.startsWith('rtmp://');
-      const isRTSP = url.startsWith('rtsp://');
-      const isHTTP = urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
-      
+      const lowerUrl = url.toLowerCase();
+      const isHLS = lowerUrl.includes(".m3u8");
+      const isRTMP = lowerUrl.startsWith("rtmp://");
+      const isRTSP = lowerUrl.startsWith("rtsp://");
+      const isHTTP = urlObj.protocol === "http:" || urlObj.protocol === "https:";
       return isHLS || isRTMP || isRTSP || isHTTP;
     } catch {
       return false;
@@ -32,34 +45,24 @@ export const StreamManager = () => {
   };
 
   const addStream = () => {
-    if (!streamUrl.trim()) {
-      toast({
-        title: "Invalid URL",
-        description: "Please enter a valid stream URL",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!isValidStreamUrl(streamUrl)) {
+    if (!streamUrl.trim() || !isValidStreamUrl(streamUrl)) {
       toast({
         title: "Invalid Stream URL",
-        description: "Please enter a valid HLS (.m3u8), RTMP, RTSP, or HTTP stream URL",
+        description: "Enter a valid HLS (.m3u8), RTMP, RTSP, or HTTP URL",
         variant: "destructive",
       });
       return;
     }
-
     if (streams.length >= 6) {
       toast({
-        title: "Maximum Streams Reached",
-        description: "You can add up to 6 streams maximum",
+        title: "Limit Reached",
+        description: "You can add up to 6 streams",
         variant: "destructive",
       });
       return;
     }
-
-    if (streams.some(stream => stream.url === streamUrl)) {
+    const normalized = normalizeUrl(streamUrl);
+    if (streams.some(s => normalizeUrl(s.url) === normalized)) {
       toast({
         title: "Duplicate Stream",
         description: "This stream URL is already added",
@@ -67,15 +70,12 @@ export const StreamManager = () => {
       });
       return;
     }
-
     const newStream: Stream = {
       id: `stream-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       url: streamUrl,
     };
-
     setStreams(prev => [...prev, newStream]);
     setStreamUrl("");
-    
     toast({
       title: "Stream Added",
       description: `Stream added successfully (${streams.length + 1}/6)`,
@@ -84,16 +84,11 @@ export const StreamManager = () => {
 
   const removeStream = (streamId: string) => {
     setStreams(prev => prev.filter(stream => stream.id !== streamId));
-    toast({
-      title: "Stream Removed",
-      description: "Stream has been removed successfully",
-    });
+    toast({ title: "Stream Removed", description: "Removed successfully" });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      addStream();
-    }
+    if (e.key === "Enter") addStream();
   };
 
   return (
@@ -124,37 +119,25 @@ export const StreamManager = () => {
                 <Input
                   id="stream-url"
                   type="url"
-                  placeholder="Enter stream URL (HLS .m3u8, RTMP, RTSP, or HTTP)"
+                  placeholder="Enter stream URL"
                   value={streamUrl}
                   onChange={(e) => setStreamUrl(e.target.value)}
                   onKeyPress={handleKeyPress}
                   className="flex-1 bg-input border-stream-border focus:ring-primary"
                 />
-                <Button 
+                <Button
                   onClick={addStream}
                   disabled={streams.length >= 6}
                   className="bg-gradient-primary hover:shadow-glow transition-all"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Stream
+                  <Plus className="h-4 w-4 mr-2" /> Add
                 </Button>
               </div>
-            </div>
-            
-            {/* Supported formats info */}
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p className="font-medium">Supported formats:</p>
-              <ul className="list-disc list-inside space-y-0.5 ml-2">
-                <li><span className="font-mono">HLS:</span> .m3u8 URLs (HTTP Live Streaming)</li>
-                <li><span className="font-mono">RTMP:</span> rtmp:// URLs (Real-Time Messaging Protocol)</li>
-                <li><span className="font-mono">RTSP:</span> rtsp:// URLs (Real Time Streaming Protocol)</li>
-                <li><span className="font-mono">HTTP:</span> Direct video stream URLs</li>
-              </ul>
             </div>
           </CardContent>
         </Card>
 
-        {/* Streams Grid */}
+        {/* Streams */}
         {streams.length === 0 ? (
           <Card className="bg-gradient-card border-stream-border">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -166,7 +149,7 @@ export const StreamManager = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
             {streams.map((stream) => (
               <VideoPlayer
                 key={stream.id}
@@ -178,19 +161,19 @@ export const StreamManager = () => {
           </div>
         )}
 
-        {/* Info section */}
+        {/* Info */}
         {streams.length > 0 && (
           <Card className="bg-gradient-card border-stream-border">
             <CardContent className="pt-6">
               <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-stream-warning mt-0.5 flex-shrink-0" />
+                <AlertCircle className="h-5 w-5 text-stream-warning mt-0.5" />
                 <div className="space-y-1">
                   <p className="text-sm font-medium">Stream Controls</p>
                   <ul className="text-xs text-muted-foreground space-y-0.5">
-                    <li>• Hover over any stream to access video controls</li>
-                    <li>• All streams start muted and will autoplay when loaded</li>
+                    <li>• Hover over any stream to access controls</li>
+                    <li>• All streams start muted by default</li>
                     <li>• Click the X button to remove a stream</li>
-                    <li>• Use fullscreen mode for detailed monitoring</li>
+                    <li>• Use fullscreen for detailed monitoring</li>
                   </ul>
                 </div>
               </div>
