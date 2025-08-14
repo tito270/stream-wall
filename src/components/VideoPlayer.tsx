@@ -33,29 +33,7 @@ export const VideoPlayer = ({ streamUrl, onRemove, className }: VideoPlayerProps
         if (Hls.isSupported()) {
           const hls = new Hls({
             enableWorker: true,
-            lowLatencyMode: false, // Disable for better stability with live streams
-            backBufferLength: 90, // Keep more back buffer for stability
-            maxBufferLength: 30, // Reasonable forward buffer
-            maxMaxBufferLength: 60, // Maximum buffer size
-            maxBufferSize: 60 * 1000 * 1000, // 60MB buffer
-            maxBufferHole: 0.5, // Allow small holes in buffer
-            highBufferWatchdogPeriod: 2, // Check buffer health every 2s
-            nudgeOffset: 0.1, // Small nudge for stalls
-            nudgeMaxRetry: 3, // Retry nudging 3 times
-            maxFragLookUpTolerance: 0.25, // Fragment lookup tolerance
-            liveSyncDurationCount: 3, // Live sync segments
-            liveMaxLatencyDurationCount: 10, // Max latency for live
-            liveDurationInfinity: true, // Handle infinite live streams
-            manifestLoadingTimeOut: 10000, // 10s manifest timeout
-            manifestLoadingMaxRetry: 4, // Retry manifest loading
-            manifestLoadingRetryDelay: 500, // Delay between retries
-            levelLoadingTimeOut: 10000, // 10s level timeout
-            levelLoadingMaxRetry: 4, // Retry level loading
-            fragLoadingTimeOut: 20000, // 20s fragment timeout
-            fragLoadingMaxRetry: 6, // Retry fragment loading
-            startLevel: -1, // Auto start level
-            capLevelToPlayerSize: true, // Cap quality to player size
-            debug: false, // Disable debug in production
+            lowLatencyMode: true,
           });
           hlsRef.current = hls;
           
@@ -63,103 +41,51 @@ export const VideoPlayer = ({ streamUrl, onRemove, className }: VideoPlayerProps
           hls.attachMedia(video);
           
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            console.log('HLS manifest parsed successfully');
             setIsLoading(false);
             video.play().then(() => {
               setIsPlaying(true);
-              console.log('HLS stream started playing');
-            }).catch((err) => {
-              console.error('HLS play failed:', err);
+            }).catch(() => {
               setHasError(true);
               setIsLoading(false);
             });
           });
 
           hls.on(Hls.Events.ERROR, (event, data) => {
-            console.warn('HLS event:', event, data);
-            
+            console.error('HLS error:', data);
             if (data.fatal) {
-              console.error('Fatal HLS error:', data);
               setHasError(true);
               setIsLoading(false);
-              
-              // Try to recover from fatal errors
-              switch (data.type) {
-                case Hls.ErrorTypes.NETWORK_ERROR:
-                  console.log('Attempting to recover from network error');
-                  hls.startLoad();
-                  break;
-                case Hls.ErrorTypes.MEDIA_ERROR:
-                  console.log('Attempting to recover from media error');
-                  hls.recoverMediaError();
-                  break;
-                default:
-                  console.log('Unrecoverable error, destroying HLS instance');
-                  hls.destroy();
-                  break;
-              }
-            } else {
-              // Handle non-fatal errors like buffer stalls
-              if (data.details === 'bufferStalledError') {
-                console.log('Buffer stall detected, attempting recovery');
-                // Don't show error for buffer stalls, they're usually recoverable
-                setTimeout(() => {
-                  if (video.paused && isPlaying) {
-                    video.play().catch(() => {
-                      console.log('Recovery play failed');
-                    });
-                  }
-                }, 1000);
-              }
-            }
-          });
-
-          // Add additional event listeners for better debugging
-          hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
-            console.log('Quality level switched to:', data.level);
-          });
-
-          hls.on(Hls.Events.FRAG_LOADED, () => {
-            // Fragment loaded successfully
-            if (hasError) {
-              setHasError(false); // Clear error state if fragments are loading
             }
           });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
           // Native HLS support (Safari)
-          console.log('Using native HLS support');
           video.src = streamUrl;
           video.addEventListener('loadedmetadata', () => {
             setIsLoading(false);
             video.play().then(() => {
               setIsPlaying(true);
-            }).catch((err) => {
-              console.error('Native HLS play failed:', err);
+            }).catch(() => {
               setHasError(true);
               setIsLoading(false);
             });
           });
         } else {
-          console.error('HLS not supported in this browser');
           setHasError(true);
           setIsLoading(false);
         }
       } else {
         // Direct video stream (RTMP/RTSP would need additional handling)
-        console.log('Using direct video stream');
         video.src = streamUrl;
         video.addEventListener('loadedmetadata', () => {
           setIsLoading(false);
           video.play().then(() => {
             setIsPlaying(true);
-          }).catch((err) => {
-            console.error('Direct stream play failed:', err);
+          }).catch(() => {
             setHasError(true);
             setIsLoading(false);
           });
         });
-        video.addEventListener('error', (err) => {
-          console.error('Direct stream error:', err);
+        video.addEventListener('error', () => {
           setHasError(true);
           setIsLoading(false);
         });
