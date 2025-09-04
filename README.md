@@ -1,15 +1,4 @@
-# StreamWall 🎥
-
-A professional multi-stream monitoring application with real-time bitrate calculation and support for all major streaming protocols.
-
-## Features ✨
-
-- **Multi-Protocol Support**: HLS (.m3u8), RTMP, RTSP, UDP, and HTTP video streams
-- **Real-time Bitrate Calculation**: Live monitoring of stream performance 
-- **User Authentication**: Secure signup/login with Supabase Auth
-- **Stream Management**: Add, edit, delete, and organize your streams
-- **Live Monitoring**: Watch up to 6 streams simultaneously
-- **Professional UI**: Dark theme optimized for monitoring environments
+# Welcome to your Lovable project
 
 ## Project info
 
