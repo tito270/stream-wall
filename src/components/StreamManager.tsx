@@ -285,8 +285,10 @@ export const StreamManager: React.FC = () => {
   const saveStreams = useCallback(async (overrideStreams?: Stream[]) => {
     const toSave = overrideStreams ?? streams;
     // determine username: prefer explicit `user`, fall back to decoded token
-    const token = getToken();
-    let currentUsername = user?.username ?? getUser()?.username ?? undefined;
+    const token = await getToken();
+    const currentUserData = user || await getUser();
+    let currentUsername = currentUserData?.username;
+    
     if (!currentUsername && token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
@@ -388,7 +390,7 @@ export const StreamManager: React.FC = () => {
 
         // Unauthenticated or server empty/unavailable: fall back to per-user localStorage
         try {
-          const currentUser = user || getUser();
+          const currentUser = user || await getUser();
           // If we have an authenticated username, prefer that key and do not
           // fallback to the shared 'anon' key to avoid mixing lists between users.
           const perUserKey = localStorageKeyFor(currentUser?.username);
@@ -888,7 +890,7 @@ const loadListFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
             {/* Stream actions */}
             <div className="flex flex-wrap items-center gap-2 mt-2">
                {/* Add Stream Button */}
-              {(!user || user.roles.add_streams) && (
+              {(!user || user.roles?.includes('add_streams')) && (
               <Button
                 onClick={addStream}
                 disabled={streams.length >= 12}
@@ -900,14 +902,14 @@ const loadListFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
 
               
               {/* Save List Button */}
-              {(!user || user.roles.save_lists) && (
+              {(!user || user.roles?.includes('save_lists')) && (
               <Button onClick={saveListToFile} variant="outline" disabled={streams.length === 0}>
                 <Save className="h-4 w-4 mr-2" /> Save List
               </Button>
               )}
 
               {/* Load List Button */}
-              {(!user || user.roles.load_lists) && (
+              {(!user || user.roles?.includes('load_lists')) && (
               <label htmlFor="load-list-file" className="inline-block">
                 <input
                   id="load-list-file"
@@ -938,7 +940,7 @@ const loadListFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
                   </SelectContent>
                 </Select>
               </div>
-              {(!user || user.roles.download_logs) && (
+              {(!user || user.roles?.includes('download_logs')) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" disabled={downloadItems.length === 0}>
@@ -981,7 +983,7 @@ const loadListFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
       </div>
     </div>
 
-    {user?.role === 'admin' && (
+    {user?.roles?.includes('admin') && (
         <ManagementDialog
           isOpen={isManagementOpen}
           onClose={() => setManagementOpen(false)}
@@ -1072,7 +1074,7 @@ const loadListFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
                   }}
                   reloadSignal={reloadSignals[stream.id] || 0}
                   onBitrateUpdate={handleBitrateUpdate}
-                  canRemove={!user || user.roles.delete_streams}
+                  canRemove={!user || user.roles?.includes('delete_streams')}
                   status={
                     (failureCounts[stream.id] || 0) === 0
                       ? 'online'

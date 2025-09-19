@@ -159,7 +159,7 @@ const VideoPlayerMemo: React.FC<VideoPlayerProps> = ({
 
     if (mustProxy || !isOurHlsUrl(finalStreamUrl)) {
       try {
-        const currentUser = getUser();
+        const currentUser = await getUser();
         const res = await fetch(`${API_BASE}/start-stream`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
