@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { login } from "../lib/auth";
 
 const Login: React.FC = () => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -12,7 +12,7 @@ const Login: React.FC = () => {
     e.preventDefault();
     setError("");
     try {
-      await login(username, password);
+      await login(email, password);
       // After login, reload so root will read server-side saved streams for this user
       window.location.href = '/';
     } catch (err) {
@@ -66,7 +66,7 @@ const Login: React.FC = () => {
         {/* Card */}
         <div className="w-full bg-[#111827] rounded-2xl shadow-2xl p-8 pt-16">
           <form onSubmit={handleLogin} className="space-y-6">
-            {/* Username field with icon */}
+            {/* Email field with icon */}
             <div className="flex items-center gap-3 bg-[#1f2937] rounded px-3 py-2">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -79,16 +79,16 @@ const Login: React.FC = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M5.121 17.804A9 9 0 1112 21a9 9 0 01-6.879-3.196z"
+                  d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
                 />
               </svg>
               <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="Username"
+                placeholder="Email"
                 className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none"
               />
             </div>
