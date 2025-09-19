@@ -1,10 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { componentTagger } from "lovable-tagger";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   server: {
-    host: true, // allow LAN access
+    host: "::",
     port: 8080,
     proxy: {
       '/start-stream':      { target: 'http://127.0.0.1:3001', changeOrigin: true },
@@ -15,8 +16,15 @@ export default defineConfig({
       '/live':              { target: 'http://127.0.0.1:8000', changeOrigin: true },
     }
   },
-  plugins: [react()],
-  resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
+  plugins: [
+    react(),
+    mode === 'development' && componentTagger(),
+  ].filter(Boolean),
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
   // Manual chunking to avoid very large single bundles.
   // Splits heavy libraries into their own vendor chunks so the app can lazy-load other parts.
   build: {
@@ -38,4 +46,4 @@ export default defineConfig({
       }
     }
   }
-});
+}));
