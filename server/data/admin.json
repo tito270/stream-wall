@@ -1,0 +1,51 @@
+[
+  {
+    "id": "1758174694270-0",
+    "name": "Falastini TV",
+    "url": "rtmp://163.172.178.94:1935/palestiniantv_source/live",
+    "color": "#8884d8",
+    "resolution": ""
+  },
+  {
+    "id": "1758174694270-1",
+    "name": "Camera",
+    "url": "rtsp://192.168.1.20:8554/live",
+    "color": "#82ca9d",
+    "resolution": ""
+  },
+  {
+    "id": "1758174694270-2",
+    "name": "3yoon TV",
+    "url": "rtsp://192.168.1.222:554/3ouyounTV",
+    "color": "#ffc658",
+    "resolution": ""
+  },
+  {
+    "id": "1758174694270-4",
+    "name": "Almagharibia TV",
+    "url": "https://titan2.mediatriple.net/videoonlylive/mttbqgyontxlive/broadcast_67a50d31a6b30.smil/playlist.m3u8",
+    "color": "#387908",
+    "resolution": ""
+  },
+  {
+    "id": "1758174694270-5",
+    "name": "Falastini TV CDN",
+    "url": "http://51.15.246.58:8081/palestiniantv_source/live/playlist.m3u8",
+    "color": "#ff0000",
+    "resolution": ""
+  },
+  {
+    "id": "1758174694270-6",
+    "name": "3yoon TV CDN",
+    "url": "https://cdn.bestream.io:19360/tmc1/tmc1.m3u8",
+    "color": "#0088fe",
+    "resolution": ""
+  },
+  {
+    "id": "1758174694270-7",
+    "name": "Syria TV Turnaround",
+    "url": "udp://239.1.1.1:5010",
+    "color": "#00c49f",
+    "resolution": ""
+  }
+]
