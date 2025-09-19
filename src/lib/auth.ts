@@ -1,12 +1,11 @@
-import { JwtPayload } from 'jwt-decode';
+import { supabase } from '@/integrations/supabase/client';
 
-export interface UserPayload extends JwtPayload {
+export interface UserPayload {
+    id: string;
+    email?: string;
     username: string;
-    role: string;
-    roles: Record<string, boolean>;
+    roles: string[];
 }
-
-const API_URL = `http://${window.location.hostname}:3001/auth`;
 
 // Clear per-user localStorage keys when a user logs in to avoid mixing saved lists
 function clearLocalStreamCacheForUser(username?: string) {
@@ -18,62 +17,83 @@ function clearLocalStreamCacheForUser(username?: string) {
     }
 }
 
-export const login = async (username: string, password: string) => {
-    const response = await fetch(`${API_URL}/login`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
+export const login = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
     });
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error((errorData && errorData.message) || 'Failed to login');
+    if (error) {
+        throw new Error(error.message || 'Failed to login');
     }
 
-    const data = await response.json();
-    const token = data.token;
-    const user = data.user || { username };
+    if (data.user) {
+        // Get user profile and roles
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('user_id', data.user.id)
+            .single();
 
-    // Save token in sessionStorage (short-lived) and store minimal user info
-    sessionStorage.setItem('token', token);
-    try { sessionStorage.setItem('user', JSON.stringify(user)); } catch (err) { void err; }
+        const { data: userRoles } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', data.user.id);
 
-    // Clear any per-user local cached streams so frontend will fetch server list
-    clearLocalStreamCacheForUser(user.username);
+        const username = profile?.username || data.user.email || 'user';
+        clearLocalStreamCacheForUser(username);
+    }
+
+    return data;
 };
 
-export const logout = () => {
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('user');
-};
-
-export const isAuthenticated = () => {
-    const token = sessionStorage.getItem('token');
-    if (!token) return false;
-    try {
-        // naive expiry check: decode base64 payload
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload && payload.exp && (payload.exp * 1000 > Date.now());
-    } catch (e) {
-        return false;
+export const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+        throw new Error(error.message);
     }
 };
 
-export const getUser = (): UserPayload | null => {
+export const isAuthenticated = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return !!session;
+};
+
+export const getUser = async (): Promise<UserPayload | null> => {
     try {
-        const raw = sessionStorage.getItem('user');
-        if (raw) return JSON.parse(raw) as UserPayload;
-        const token = sessionStorage.getItem('token');
-        if (!token) return null;
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload as UserPayload;
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session?.user) return null;
+
+        // Get user profile and roles
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('user_id', session.user.id)
+            .single();
+
+        const { data: userRoles } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', session.user.id);
+
+        return {
+            id: session.user.id,
+            email: session.user.email,
+            username: profile?.username || session.user.email || 'user',
+            roles: userRoles?.map(r => r.role) || []
+        };
     } catch (e) {
         return null;
     }
 };
 
-export const getToken = (): string | null => {
-    try { return sessionStorage.getItem('token'); } catch { return null; }
+export const getToken = (): Promise<string | null> => {
+    try {
+        return supabase.auth.getSession().then(({ data: { session } }) => 
+            session?.access_token || null
+        );
+    } catch {
+        return Promise.resolve(null);
+    }
 };

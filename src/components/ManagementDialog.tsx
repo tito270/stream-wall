@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -27,16 +28,14 @@ interface ManagementDialogProps {
 }
 
 type User = {
+  id: string;
   username: string;
-  role: 'admin' | 'user' | string;
-  roles?: Record<string, boolean>;
+  roles: string[];
 };
-
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:3001`;
 
 const allRoles = [
   "add_streams",
-  "save_lists",
+  "save_lists", 
   "load_lists",
   "download_logs",
   "delete_streams",
@@ -44,22 +43,41 @@ const allRoles = [
 
 const ManagementDialog: React.FC<ManagementDialogProps> = ({ isOpen, onClose }) => {
   const [users, setUsers] = useState<User[]>([]);
-  const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' as 'user' | 'admin' });
+  const [newUser, setNewUser] = useState({ email: '', password: '' });
   const { toast } = useToast();
-
-  // single, stable confirm dialog
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     try {
-      const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/users`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      // Get profiles and their roles from Supabase
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, user_id, username');
+        
+      if (profilesError) throw profilesError;
+
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+        
+      if (rolesError) throw rolesError;
+
+      // Combine profiles with roles
+      const usersWithRoles: User[] = profiles?.map(profile => ({
+        id: profile.user_id,
+        username: profile.username,
+        roles: userRoles
+          ?.filter(ur => ur.user_id === profile.user_id)
+          ?.map(ur => ur.role) || []
+      })) || [];
+
+      setUsers(usersWithRoles);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch users",
+        variant: "destructive",
       });
-      const data = await response.json();
-      setUsers(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error(e);
     }
   };
 
@@ -67,185 +85,169 @@ const ManagementDialog: React.FC<ManagementDialogProps> = ({ isOpen, onClose }) 
     if (isOpen) fetchUsers();
   }, [isOpen]);
 
-  const handleCreateUser = async () => {
-    const payload = {
-      ...newUser,
-      username: newUser.username.trim().replace(/\s+/g, ''),
-    };
-
-    if (payload.username.length < 3) {
-      return toast({ title: "Username too short", description: "Min 3 characters.", variant: "destructive" });
-    }
-    if (payload.password.length < 6) {
-      return toast({ title: "Password too short", description: "Min 6 characters.", variant: "destructive" });
+  const createUser = async () => {
+    if (newUser.email.trim().length < 3 || newUser.password.length < 6) {
+      toast({
+        title: "Error",
+        description: "Email must be at least 3 characters and password at least 6 characters",
+        variant: "destructive",
+      });
+      return;
     }
 
     try {
-      const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/create-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload),
+      // Create user via Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email: newUser.email,
+        password: newUser.password,
       });
 
-      if (response.ok) {
-        toast({ title: "User created successfully" });
-        await fetchUsers();
-        setNewUser({ username: '', password: '', role: 'user' });
-      } else {
-        const error = await response.json();
-        toast({ title: "Error creating user", description: error?.message, variant: "destructive" });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+      if (error) throw error;
 
-  const handleRoleChange = async (username: string, role: string, value: boolean) => {
-    try {
-      const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/user-roles`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ username, role, value }),
+      toast({
+        title: "Success", 
+        description: "User created successfully",
       });
-
-      if (response.ok) {
-        toast({ title: "User role updated" });
-        fetchUsers();
-      } else {
-        const error = await response.json();
-        toast({ title: "Error updating role", description: error?.message, variant: "destructive" });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handlePasswordChange = async (username: string) => {
-    const newPassword = prompt(`Enter new password for ${username}:`);
-    if (!newPassword) return;
-    if (newPassword.length < 6) {
-      return toast({
-        title: "Password too short",
-        description: "Password must be at least 6 characters long.",
+      setNewUser({ email: '', password: '' });
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
         variant: "destructive",
       });
     }
+  };
 
+  const handleRoleChange = async (userId: string, role: string, value: boolean) => {
     try {
-      const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/update-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ username, password: newPassword }),
-      });
-
-      if (response.ok) {
-        toast({ title: "Password updated successfully" });
+      if (value) {
+        // Add role
+        const { error } = await supabase
+          .from('user_roles')
+          .insert({ user_id: userId, role: role as any });
+        if (error) throw error;
       } else {
-        const error = await response.json();
-        toast({ title: "Error updating password", description: error?.message, variant: "destructive" });
+        // Remove role
+        const { error } = await supabase
+          .from('user_roles')
+          .delete()
+          .eq('user_id', userId)
+          .eq('role', role);
+        if (error) throw error;
       }
-    } catch (e) {
-      console.error(e);
+      
+      fetchUsers();
+      toast({
+        title: "Success",
+        description: `Role ${value ? 'added' : 'removed'} successfully`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update role",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleDeleteUser = async (username: string) => {
+  const handleDeleteUser = async (userId: string) => {
     try {
-      const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/delete-user/${username}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      // Delete from auth.users (this will cascade to profiles and user_roles)
+      const { error } = await supabase.auth.admin.deleteUser(userId);
+      if (error) throw error;
 
-      if (response.ok) {
-        toast({ title: "User deleted successfully" });
-        await fetchUsers();
-      } else {
-        const error = await response.json();
-        toast({ title: "Error deleting user", description: error?.message, variant: "destructive" });
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
+      toast({
+        title: "Success",
+        description: "User deleted successfully",
+      });
+      fetchUsers();
       setConfirmDeleteUser(null);
+    } catch (error: any) {
+      toast({
+        title: "Error", 
+        description: error.message || "Failed to delete user",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePasswordChange = async (userId: string) => {
+    const newPassword = prompt("Enter new password (min 6 characters):");
+    if (!newPassword || newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.admin.updateUserById(userId, {
+        password: newPassword
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Password updated successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update password", 
+        variant: "destructive",
+      });
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
-        <DialogHeader className="sticky top-0 bg-background z-10">
-          <DialogTitle>User Management</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>User Management</DialogTitle>
+          </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-          {/* Create User — improved */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleCreateUser();
-            }}
-            className="rounded-xl border p-4"
+          {/* Create User Form */}
+          <form 
+            onSubmit={(e) => { e.preventDefault(); createUser(); }}
+            className="space-y-4 p-4 border rounded-lg bg-muted/50"
           >
-            <h3 className="text-lg font-semibold mb-2">Create User</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
-              <Label htmlFor="new-username" className="sm:col-span-1">Username</Label>
-              <Input
-                id="new-username"
-                className="sm:col-span-3"
-                value={newUser.username}
-                onChange={(e) =>
-                  setNewUser({ ...newUser, username: e.target.value })
-                }
-                placeholder="Enter username"
-                autoComplete="off"
-                required
-                minLength={3}
-              />
-
-              <Label htmlFor="new-password" className="sm:col-span-1">Password</Label>
-              <Input
-                id="new-password"
-                type="password"
-                className="sm:col-span-3"
-                value={newUser.password}
-                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                placeholder="Minimum 6 characters"
-                required
-                minLength={6}
-              />
-
-              <Label htmlFor="new-role" className="sm:col-span-1">Role</Label>
-              <select
-                id="new-role"
-                className="sm:col-span-3 h-10 rounded-md border bg-background px-3 text-sm"
-                value={newUser.role}
-                onChange={(e) =>
-                  setNewUser({ ...newUser, role: e.target.value as 'user' | 'admin' })
-                }
-              >
-                <option value="user">user</option>
-                <option value="admin">admin</option>
-              </select>
+            <h3 className="text-lg font-semibold">Create New User</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  placeholder="user@example.com"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  placeholder="Minimum 6 characters"
+                  required
+                />
+              </div>
             </div>
-
-            <div className="mt-4">
+            
+            <div>
               <Button
                 type="submit"
                 disabled={
-                  newUser.username.trim().length < 3 || newUser.password.length < 6
+                  newUser.email.trim().length < 3 || newUser.password.length < 6
                 }
               >
                 Create User
@@ -257,19 +259,18 @@ const ManagementDialog: React.FC<ManagementDialogProps> = ({ isOpen, onClose }) 
           <div className="mt-2">
             <h3 className="text-lg font-semibold mb-3">Users and Permissions</h3>
 
-            {/* inner scroll so header & create form remain visible */}
             <div className="max-h-[60vh] overflow-y-auto pr-2">
               {users.map((user) => (
-                <div key={user.username} className="mb-4 p-4 border rounded-lg">
+                <div key={user.id} className="mb-4 p-4 border rounded-lg">
                   <div className="flex justify-between items-center">
                     <h4 className="font-bold">
-                      {user.username} ({user.role})
+                      {user.username} ({user.roles.includes('admin') ? 'admin' : 'user'})
                     </h4>
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handlePasswordChange(user.username)}
+                        onClick={() => handlePasswordChange(user.id)}
                       >
                         Change Password
                       </Button>
@@ -277,8 +278,8 @@ const ManagementDialog: React.FC<ManagementDialogProps> = ({ isOpen, onClose }) 
                       <Button
                         variant="destructive"
                         size="sm"
-                        disabled={user.role === 'admin'}
-                        onClick={() => setConfirmDeleteUser(user.username)}
+                        disabled={user.roles.includes('admin')}
+                        onClick={() => setConfirmDeleteUser(user.id)}
                       >
                         Delete User
                       </Button>
@@ -289,53 +290,52 @@ const ManagementDialog: React.FC<ManagementDialogProps> = ({ isOpen, onClose }) 
                     {allRoles.map((role) => (
                       <div key={role} className="flex items-center space-x-2">
                         <Switch
-                          id={`${user.username}-${role}`}
-                          checked={Boolean(user.roles?.[role])}
+                          id={`${user.id}-${role}`}
+                          checked={user.roles.includes(role)}
                           onCheckedChange={(value) =>
-                            handleRoleChange(user.username, role, value)
+                            handleRoleChange(user.id, role, value)
                           }
-                          disabled={user.role === 'admin'}
+                          disabled={user.roles.includes('admin')}
                         />
-                        <Label htmlFor={`${user.username}-${role}`}>
-                          {role.replace(/_/g, ' ')}
+                        <Label
+                          htmlFor={`${user.id}-${role}`}
+                          className="text-sm font-medium"
+                        >
+                          {role}
                         </Label>
                       </div>
                     ))}
                   </div>
                 </div>
               ))}
-              {users.length === 0 && (
-                <div className="text-sm text-muted-foreground p-4 border rounded-lg">
-                  No users found.
-                </div>
-              )}
             </div>
           </div>
-        </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Global, controlled delete confirmation */}
-        <AlertDialog open={!!confirmDeleteUser} onOpenChange={(open) => !open && setConfirmDeleteUser(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {confirmDeleteUser ? `Delete ${confirmDeleteUser}?` : 'Delete user?'}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. The user account will be permanently removed.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => confirmDeleteUser && handleDeleteUser(confirmDeleteUser)}
-              >
-                Continue
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </DialogContent>
-    </Dialog>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog 
+        open={confirmDeleteUser !== null} 
+        onOpenChange={() => setConfirmDeleteUser(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the user account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmDeleteUser && handleDeleteUser(confirmDeleteUser)}
+            >
+              Delete User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 

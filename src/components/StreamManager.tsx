@@ -219,7 +219,7 @@ export const StreamManager: React.FC = () => {
       });
     }
 
-    if (user?.role !== 'admin') {
+    if (user && !user.roles.includes('admin')) {
       const currentStreamIds = new Set(streams.map(s => s.id));
       return items.filter(item => currentStreamIds.has(item.key));
     }
@@ -228,18 +228,11 @@ export const StreamManager: React.FC = () => {
   }, [allLogFiles, streams, user]);
 
   useEffect(() => {
-    const currentUser = getUser();
-    if (currentUser && currentUser.role === 'admin') {
-      // Create a proxy for roles to always return true for admin
-      const adminRoles = new Proxy({}, {
-        get: function() {
-          return true;
-        }
-      });
-      setUser({ ...currentUser, roles: adminRoles });
-    } else {
+    const fetchCurrentUser = async () => {
+      const currentUser = await getUser();
       setUser(currentUser);
-    }
+    };
+    fetchCurrentUser();
   }, []);
 
   // Fetch all available log files from server
@@ -963,7 +956,7 @@ const loadListFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
                 </DropdownMenuContent>
               </DropdownMenu>
               )}
-              {user?.role === 'admin' && (
+          {user?.roles?.includes('admin') && (
                 <Button variant="outline" size="icon" onClick={() => setManagementOpen(true)}>
                   <Settings className="h-4 w-4" />
                 </Button>

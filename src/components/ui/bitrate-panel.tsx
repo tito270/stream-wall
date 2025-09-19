@@ -1,5 +1,4 @@
 import React from 'react';
-import BitrateGraph from './bitrate-graph';
 
 interface BitratePanelProps {
   title?: string;
@@ -18,7 +17,9 @@ const BitratePanel: React.FC<BitratePanelProps> = ({ title = 'Bitrate', subtitle
           {subtitle && <div className="text-xs text-muted-foreground font-mono">{subtitle}</div>}
         </div>
       </div>
-      <BitrateGraph data={data} color={color} maxBitrate={maxBitrate} />
+      <div className="h-32 flex items-center justify-center text-muted-foreground">
+        Bitrate visualization ({data.length} data points)
+      </div>
     </div>
   );
 };
