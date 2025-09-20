@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { login } from "../lib/auth";
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -12,7 +12,9 @@ const Login: React.FC = () => {
     e.preventDefault();
     setError("");
     try {
-      await login(email, password);
+      // Handle special case for admin username
+      const loginEmail = username === "admin" ? "admin@admin.com" : username;
+      await login(loginEmail, password);
       // After login, reload so root will read server-side saved streams for this user
       window.location.href = '/';
     } catch (err) {
@@ -66,7 +68,7 @@ const Login: React.FC = () => {
         {/* Card */}
         <div className="w-full bg-[#111827] rounded-2xl shadow-2xl p-8 pt-16">
           <form onSubmit={handleLogin} className="space-y-6">
-            {/* Email field with icon */}
+            {/* Username field with icon */}
             <div className="flex items-center gap-3 bg-[#1f2937] rounded px-3 py-2">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -79,16 +81,16 @@ const Login: React.FC = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                 />
               </svg>
               <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
-                placeholder="Email"
+                placeholder="Username (admin)"
                 className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none"
               />
             </div>
